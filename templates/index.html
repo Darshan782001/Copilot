@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teams Call Summarizer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        input, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        textarea { min-height: 150px; resize: vertical; }
+        button { background: #0078d4; color: white; padding: 12px 30px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #005a9e; }
+        .result { margin-top: 20px; padding: 15px; background: #e8f4f8; border-left: 4px solid #0078d4; border-radius: 4px; display: none; }
+        .error { background: #ffe8e8; border-left-color: #d32f2f; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; cursor: pointer; background: #e0e0e0; border-radius: 4px; }
+        .tab.active { background: #0078d4; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Teams Call Summarizer</h1>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('join')">Join Teams Call</div>
+            <div class="tab" onclick="switchTab('teams')">Teams Webhook</div>
+            <div class="tab" onclick="switchTab('summarize')">Text Summarizer</div>
+        </div>
+
+        <div id="join-tab" class="tab-content active">
+            <form onsubmit="joinCall(event)">
+                <div class="form-group">
+                    <label>Teams Meeting URL</label>
+                    <input type="text" id="meeting_url" placeholder="https://teams.microsoft.com/l/meetup-join/..." required>
+                </div>
+                <button type="submit">Join Call as Bot</button>
+            </form>
+        </div>
+
+        <div id="teams-tab" class="tab-content">
+            <form onsubmit="submitTeams(event)">
+                <div class="form-group">
+                    <label>Meeting ID</label>
+                    <input type="text" id="meeting_id" placeholder="MEET-12345" required>
+                </div>
+                <div class="form-group">
+                    <label>Transcript</label>
+                    <textarea id="transcript" placeholder="Enter meeting transcript..." required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Participants (comma-separated)</label>
+                    <input type="text" id="participants" placeholder="john@example.com, jane@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Recipient Email</label>
+                    <input type="email" id="recipient_email" placeholder="manager@example.com" required>
+                </div>
+                <button type="submit">Process & Send Email</button>
+            </form>
+        </div>
+
+        <div id="summarize-tab" class="tab-content">
+            <form onsubmit="submitSummarize(event)">
+                <div class="form-group">
+                    <label>Text to Summarize</label>
+                    <textarea id="text" placeholder="Enter text to summarize..." required></textarea>
+                </div>
+                <button type="submit">Summarize</button>
+            </form>
+        </div>
+
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(tab + '-tab').classList.add('active');
+            document.getElementById('result').style.display = 'none';
+        }
+
+        async function joinCall(e) {
+            e.preventDefault();
+            const result = document.getElementById('result');
+            result.style.display = 'block';
+            result.className = 'result';
+            result.textContent = 'Joining Teams call as bot...';
+
+            const data = { meeting_url: document.getElementById('meeting_url').value };
+
+            try {
+                const response = await fetch('/join-call', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const json = await response.json();
+                if (json.error) {
+                    result.className = 'result error';
+                    result.innerHTML = '<strong>Error:</strong><br>' + json.error;
+                } else {
+                    result.innerHTML = '<strong>Success!</strong><br>' + json.message;
+                }
+            } catch (error) {
+                result.className = 'result error';
+                result.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function submitTeams(e) {
+            e.preventDefault();
+            const result = document.getElementById('result');
+            result.style.display = 'block';
+            result.className = 'result';
+            result.textContent = 'Processing...';
+
+            const data = {
+                meeting_id: document.getElementById('meeting_id').value,
+                transcript: document.getElementById('transcript').value,
+                participants: document.getElementById('participants').value.split(',').map(p => p.trim()),
+                recipient_email: document.getElementById('recipient_email').value
+            };
+
+            try {
+                const response = await fetch('/webhook/teams', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const json = await response.json();
+                result.innerHTML = '<strong>Success!</strong><br>Summary: ' + json.summary + '<br>Email sent to ' + data.recipient_email;
+            } catch (error) {
+                result.className = 'result error';
+                result.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function submitSummarize(e) {
+            e.preventDefault();
+            const result = document.getElementById('result');
+            result.style.display = 'block';
+            result.className = 'result';
+            result.textContent = 'Summarizing...';
+
+            const data = { text: document.getElementById('text').value };
+
+            try {
+                const response = await fetch('/summarize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const json = await response.json();
+                result.innerHTML = '<strong>Summary:</strong><br>' + json.summary;
+            } catch (error) {
+                result.className = 'result error';
+                result.textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
